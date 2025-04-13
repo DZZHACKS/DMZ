@@ -839,7 +839,8 @@ async def on_connect():
 async def on_resumed():
     print("Bot session resumed.")
 
-# Start Flask and bot
+# Start Flask and the bot
 if __name__ == "__main__":
-    threading.Thread(target=lambda: app.run(host="0.0.0.0", port=5031)).start()
-    bot.run(os.getenv("DISCORD_TOKEN"))# Replace with your actual token or use os.getenv("DISCORD_TOKEN")
+    port = int(os.getenv("PORT", 5031))
+    threading.Thread(target=lambda: app.run(host="0.0.0.0", port=port)).start()
+    bot.run(os.getenv("DISCORD_TOKEN"))
