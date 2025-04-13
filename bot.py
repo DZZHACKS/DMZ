@@ -12,6 +12,9 @@ import asyncio
 from dotenv import load_dotenv
 import os
 
+# Charger les variables d'environnement
+load_dotenv()
+
 # Initialize intents
 intents = discord.Intents.default()
 intents.message_content = True
@@ -839,5 +842,4 @@ async def on_resumed():
 # Start Flask and bot
 if __name__ == "__main__":
     threading.Thread(target=lambda: app.run(host="0.0.0.0", port=5031)).start()
-    load_dotenv()
     bot.run(os.getenv("DISCORD_TOKEN"))# Replace with your actual token or use os.getenv("DISCORD_TOKEN")
