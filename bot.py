@@ -11,17 +11,18 @@ import threading
 import asyncio
 from dotenv import load_dotenv
 import os
+
 # Initialize intents
 intents = discord.Intents.default()
 intents.message_content = True
-intents.members = True  # Required for role management
+intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # SQLite database
 db = sqlite3.connect("keys.db", check_same_thread=False)
 cursor = db.cursor()
 
-# Create table for keys (with android_uid)
+# Create table for keys
 cursor.execute('''CREATE TABLE IF NOT EXISTS keys (
     key TEXT PRIMARY KEY,
     user_id TEXT,
@@ -45,7 +46,7 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS maintenance (
 )''')
 db.commit()
 
-# Initialize maintenance state if not exists
+# Initialize maintenance state
 cursor.execute("SELECT * FROM maintenance WHERE id = 1")
 if not cursor.fetchone():
     cursor.execute("INSERT INTO maintenance (id, active, end_time, last_updated) VALUES (?, ?, ?, ?)",
@@ -57,11 +58,11 @@ ADMIN_ROLE_ID = "1360944517972496428"
 GUILD_ID = "1360944517972496426"
 VIP_ROLE_ID = "1360944517972496427"
 
-# Flask application for API
+# Flask application
 app = Flask(__name__)
 CORS(app)
 
-# Function to check maintenance status
+# Check maintenance status
 def is_maintenance_active():
     cursor.execute("SELECT active, end_time FROM maintenance WHERE id = 1")
     row = cursor.fetchone()
@@ -73,7 +74,7 @@ def is_maintenance_active():
     end_time = datetime.fromisoformat(end_time)
     return active and datetime.now() < end_time
 
-# Route to check maintenance status
+# Flask routes
 @app.route('/check_maintenance', methods=['GET'])
 def check_maintenance():
     cursor.execute("SELECT active, end_time FROM maintenance WHERE id = 1")
@@ -114,7 +115,6 @@ def check_key_status():
     key = request.args.get('key')
     if not key:
         return jsonify({"error": "Invalid request"}), 400
-    
     cursor.execute("SELECT user_id, expiration, status, registration_date FROM keys WHERE key = ?", (key,))
     row = cursor.fetchone()
     if row:
@@ -139,15 +139,12 @@ def check_uid():
         return jsonify({"error": "Server under maintenance"}), 503
     key = request.args.get('key')
     android_uid = request.args.get('android_uid')
-
     if not key or not android_uid:
         return jsonify({"error": "Invalid request"}), 400
-
     cursor.execute("SELECT android_uid FROM keys WHERE key = ?", (key,))
     row = cursor.fetchone()
     if not row:
         return jsonify({"error": "Invalid key"}), 404
-    
     if row[0]:
         registered_uid = row[0]
         if registered_uid != android_uid:
@@ -167,34 +164,26 @@ def register_uid():
             key = data.get('key')
             discord_id = data.get('discord_id')
             android_uid = data.get('android_uid')
-        else:  # GET
+        else:
             key = request.args.get('key')
             discord_id = request.args.get('discord_id')
             android_uid = request.args.get('android_uid')
-        
         if not key or not discord_id or not android_uid:
             return jsonify({"error": "Invalid request"}), 400
-        
-        # Check if user is banned
         cursor.execute("SELECT * FROM banned_users WHERE user_id = ?", (discord_id,))
         if cursor.fetchone():
             return jsonify({"error": "Access denied"}), 403
-
         cursor.execute("SELECT user_id FROM keys WHERE key = ?", (key,))
         row = cursor.fetchone()
         if not row:
             return jsonify({"error": "Invalid key"}), 404
-        
         cursor.execute("UPDATE keys SET android_uid = ?, user_id = ? WHERE key = ?",
                        (android_uid, discord_id, key))
         db.commit()
-        
         log_channel = discord.utils.get(bot.get_guild(int(GUILD_ID)).channels, name="logs")
         if log_channel:
             ip_address = request.remote_addr
             bot.loop.create_task(log_channel.send(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] User {discord_id} registered UID with key {key} | IP: {ip_address}"))
-        
-        # Add VIP role to user
         guild = bot.get_guild(int(GUILD_ID))
         member = guild.get_member(int(discord_id))
         if member:
@@ -202,7 +191,6 @@ def register_uid():
             if vip_role and vip_role not in member.roles:
                 bot.loop.create_task(member.add_roles(vip_role))
                 bot.loop.create_task(log_channel.send(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] VIP role added to user {discord_id} | IP: {ip_address}"))
-
         return jsonify({"success": "UID registered"}), 200
     except Exception as e:
         print(f"Error in register_uid: {e}")
@@ -219,22 +207,18 @@ def log_usage():
                 return jsonify({"error": "Invalid request"}), 400
             key = data.get('key')
             action = data.get('action')
-        else:  # GET
+        else:
             key = request.args.get('key')
             action = request.args.get('action')
-        
         if not key or not action:
             return jsonify({"error": "Invalid request"}), 400
-        
         cursor.execute("SELECT user_id FROM keys WHERE key = ?", (key,))
         row = cursor.fetchone()
         discord_id = row[0] if row else "Unknown"
-
         log_channel = discord.utils.get(bot.get_guild(int(GUILD_ID)).channels, name="logs")
         if log_channel:
             ip_address = request.remote_addr
             bot.loop.create_task(log_channel.send(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Key `{key}` used action: {action} | Discord ID: {discord_id} | IP: {ip_address}"))
-        
         return jsonify({"success": "Logged"}), 200
     except Exception as e:
         print(f"Error in log_usage: {e}")
@@ -250,35 +234,30 @@ def script_execution():
             if not data:
                 return jsonify({"error": "Invalid request"}), 400
             key = data.get('key')
-        else:  # GET
+        else:
             key = request.args.get('key')
-        
         if not key:
             return jsonify({"error": "Invalid request"}), 400
-        
         cursor.execute("SELECT user_id FROM keys WHERE key = ?", (key,))
         row = cursor.fetchone()
         discord_id = row[0] if row else "Unknown"
-
         log_channel = discord.utils.get(bot.get_guild(int(GUILD_ID)).channels, name="logs")
         if log_channel:
             ip_address = request.remote_addr
             bot.loop.create_task(log_channel.send(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Script executed with key `{key}` | Discord ID: {discord_id} | IP: {ip_address}"))
-        
         return jsonify({"success": "Execution logged"}), 200
     except Exception as e:
         print(f"Error in script_execution: {e}")
         return jsonify({"error": "Server error"}), 500
 
-# Generate a unique key
+# Utility functions
 def generate_unique_key():
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
 
-# Check if user is admin
 def is_admin(user):
     return any(role.id == int(ADMIN_ROLE_ID) for role in user.roles)
 
-# View for ticket actions
+# Views and modals
 class TicketActionsView(View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -288,7 +267,6 @@ class TicketActionsView(View):
         if not is_admin(interaction.user):
             await interaction.response.send_message("Only admins can close tickets!", ephemeral=True)
             return
-        
         await interaction.response.defer(ephemeral=True)
         channel = interaction.channel
         await channel.send(f"Ticket closed by {interaction.user.mention}.")
@@ -297,7 +275,6 @@ class TicketActionsView(View):
             await log_channel.send(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Ticket {channel.name} closed by {interaction.user.mention}")
         await channel.delete()
 
-# Buttons for tickets
 class TicketView(View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -340,7 +317,6 @@ class TicketView(View):
         await ticket_channel.send(f"Payment request ticket created by {user.mention}. Please specify your payment method and the plan you are interested in (e.g., 7-day VIP key).", view=TicketActionsView())
         await interaction.followup.send(f"Your payment request ticket has been created: {ticket_channel.mention}", ephemeral=True)
 
-# Buttons for admin interface
 class AdminView(View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -350,44 +326,52 @@ class AdminView(View):
         if not is_admin(interaction.user):
             await interaction.response.send_message("Only admins can use this!", ephemeral=True)
             return
-        await interaction.response.defer(ephemeral=True)
         try:
-            await interaction.followup.send_modal(AddKeyModal())
-        except discord.errors.NotFound:
-            print(f"Failed to send modal for add_key: Interaction expired")
+            await interaction.response.send_modal(AddKeyModal())
+        except discord.errors.InteractionResponded:
+            print(f"Interaction already responded for add_key")
+        except Exception as e:
+            print(f"Error in add_key: {e}")
+            await interaction.response.send_message("An error occurred while opening the modal.", ephemeral=True)
 
     @discord.ui.button(label="Check Key", style=discord.ButtonStyle.blurple, custom_id="check_key")
     async def check_key(self, interaction: discord.Interaction, button: Button):
         if not is_admin(interaction.user):
             await interaction.response.send_message("Only admins can use this!", ephemeral=True)
             return
-        await interaction.response.defer(ephemeral=True)
         try:
-            await interaction.followup.send_modal(CheckKeyModal())
-        except discord.errors.NotFound:
-            print(f"Failed to send modal for check_key: Interaction expired")
+            await interaction.response.send_modal(CheckKeyModal())
+        except discord.errors.InteractionResponded:
+            print(f"Interaction already responded for check_key")
+        except Exception as e:
+            print(f"Error in check_key: {e}")
+            await interaction.response.send_message("An error occurred while opening the modal.", ephemeral=True)
 
     @discord.ui.button(label="Extend Key", style=discord.ButtonStyle.blurple, custom_id="extend_key")
     async def extend_key(self, interaction: discord.Interaction, button: Button):
         if not is_admin(interaction.user):
             await interaction.response.send_message("Only admins can use this!", ephemeral=True)
             return
-        await interaction.response.defer(ephemeral=True)
         try:
-            await interaction.followup.send_modal(ExtendKeyModal())
-        except discord.errors.NotFound:
-            print(f"Failed to send modal for extend_key: Interaction expired")
+            await interaction.response.send_modal(ExtendKeyModal())
+        except discord.errors.InteractionResponded:
+            print(f"Interaction already responded for extend_key")
+        except Exception as e:
+            print(f"Error in extend_key: {e}")
+            await interaction.response.send_message("An error occurred while opening the modal.", ephemeral=True)
 
     @discord.ui.button(label="Delete Key", style=discord.ButtonStyle.red, custom_id="delete_key")
     async def delete_key(self, interaction: discord.Interaction, button: Button):
         if not is_admin(interaction.user):
             await interaction.response.send_message("Only admins can use this!", ephemeral=True)
             return
-        await interaction.response.defer(ephemeral=True)
         try:
-            await interaction.followup.send_modal(DeleteKeyModal())
-        except discord.errors.NotFound:
-            print(f"Failed to send modal for delete_key: Interaction expired")
+            await interaction.response.send_modal(DeleteKeyModal())
+        except discord.errors.InteractionResponded:
+            print(f"Interaction already responded for delete_key")
+        except Exception as e:
+            print(f"Error in delete_key: {e}")
+            await interaction.response.send_message("An error occurred while opening the modal.", ephemeral=True)
 
     @discord.ui.button(label="List Keys", style=discord.ButtonStyle.blurple, custom_id="list_keys")
     async def list_keys(self, interaction: discord.Interaction, button: Button):
@@ -414,51 +398,52 @@ class AdminView(View):
         if not is_admin(interaction.user):
             await interaction.response.send_message("Only admins can use this!", ephemeral=True)
             return
-        await interaction.response.defer(ephemeral=True)
         try:
-            await interaction.followup.send_modal(RevokeKeyModal())
-        except discord.errors.NotFound:
-            print(f"Failed to send modal for revoke_key: Interaction expired")
+            await interaction.response.send_modal(RevokeKeyModal())
+        except discord.errors.InteractionResponded:
+            print(f"Interaction already responded for revoke_key")
+        except Exception as e:
+            print(f"Error in revoke_key: {e}")
+            await interaction.response.send_message("An error occurred while opening the modal.", ephemeral=True)
 
     @discord.ui.button(label="Ban User", style=discord.ButtonStyle.red, custom_id="ban_user")
     async def ban_user(self, interaction: discord.Interaction, button: Button):
         if not is_admin(interaction.user):
             await interaction.response.send_message("Only admins can use this!", ephemeral=True)
             return
-        await interaction.response.defer(ephemeral=True)
         try:
-            await interaction.followup.send_modal(BanUserModal())
-        except discord.errors.NotFound:
-            print(f"Failed to send modal for ban_user: Interaction expired")
+            await interaction.response.send_modal(BanUserModal())
+        except discord.errors.InteractionResponded:
+            print(f"Interaction already responded for ban_user")
+        except Exception as e:
+            print(f"Error in ban_user: {e}")
+            await interaction.response.send_message("An error occurred while opening the modal.", ephemeral=True)
 
     @discord.ui.button(label="Maintenance", style=discord.ButtonStyle.grey, custom_id="maintenance")
     async def maintenance(self, interaction: discord.Interaction, button: Button):
         if not is_admin(interaction.user):
             await interaction.response.send_message("Only admins can use this!", ephemeral=True)
             return
-        await interaction.response.defer(ephemeral=True)
         try:
-            await interaction.followup.send_modal(MaintenanceModal())
-        except discord.errors.NotFound:
-            print(f"Failed to send modal for maintenance: Interaction expired")
+            await interaction.response.send_modal(MaintenanceModal())
+        except discord.errors.InteractionResponded:
+            print(f"Interaction already responded for maintenance")
+        except Exception as e:
+            print(f"Error in maintenance: {e}")
+            await interaction.response.send_message("An error occurred while opening the modal.", ephemeral=True)
 
-# Modals for input
 class AddKeyModal(Modal, title="Add a VIP Key"):
     duration = TextInput(label="Duration (days)", placeholder="e.g., 7")
     user_id = TextInput(label="User ID", placeholder="e.g., 123456789")
 
     async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
         try:
             duration_days = int(self.duration.value)
             user_id = self.user_id.value
-
-            # Check if user is banned
             cursor.execute("SELECT * FROM banned_users WHERE user_id = ?", (user_id,))
             if cursor.fetchone():
-                await interaction.followup.send("This user is banned and cannot receive a key!", ephemeral=True)
+                await interaction.response.send_message("This user is banned and cannot receive a key!", ephemeral=True)
                 return
-
             key = generate_unique_key()
             expiration = datetime.now() + timedelta(days=duration_days)
             registration_date = datetime.now().isoformat()
@@ -467,43 +452,40 @@ class AddKeyModal(Modal, title="Add a VIP Key"):
             db.commit()
             user = await bot.fetch_user(int(user_id))
             await user.send(f"Your VIP Key: `{key}`\nExpires on: {expiration.strftime('%Y-%m-%d')}")
-            await interaction.followup.send(f"Key sent to <@{user_id}>!", ephemeral=True)
-            
+            await interaction.response.send_message(f"Key sent to <@{user_id}>!", ephemeral=True)
             keys_channel = discord.utils.get(interaction.guild.channels, name="keys")
             if keys_channel:
                 await keys_channel.send(f"Key: `{key}`\nUser: {user.name} (<@{user_id}>)\nRegistered: {registration_date.split('T')[0]}\nExpires: {expiration.strftime('%Y-%m-%d')}")
         except ValueError:
-            await interaction.followup.send("Duration must be an integer!", ephemeral=True)
+            await interaction.response.send_message("Duration must be an integer!", ephemeral=True)
         except Exception as e:
             print(f"Error in AddKeyModal: {e}")
-            await interaction.followup.send("An error occurred while adding the key.", ephemeral=True)
+            await interaction.response.send_message("An error occurred while adding the key.", ephemeral=True)
 
 class CheckKeyModal(Modal, title="Check a VIP Key"):
     key = TextInput(label="Key", placeholder="e.g., ABC123")
 
     async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
         try:
             cursor.execute("SELECT * FROM keys WHERE key = ?", (self.key.value,))
             row = cursor.fetchone()
             if row:
                 user_id, expiration, status, registration_date = row[1], row[2], row[3], row[4]
-                await interaction.followup.send(
+                await interaction.response.send_message(
                     f"Key: `{self.key.value}`\nUser: <@{user_id}>\nRegistered: {registration_date.split('T')[0]}\nExpiration: {expiration.split('T')[0]}\nStatus: {status}",
                     ephemeral=True
                 )
             else:
-                await interaction.followup.send("Key not found.", ephemeral=True)
+                await interaction.response.send_message("Key not found.", ephemeral=True)
         except Exception as e:
             print(f"Error in CheckKeyModal: {e}")
-            await interaction.followup.send("An error occurred while checking the key.", ephemeral=True)
+            await interaction.response.send_message("An error occurred while checking the key.", ephemeral=True)
 
 class ExtendKeyModal(Modal, title="Extend a VIP Key"):
     key = TextInput(label="Key", placeholder="e.g., ABC123")
     duration = TextInput(label="Additional Days", placeholder="e.g., 7")
 
     async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
         try:
             extra_days = int(self.duration.value)
             cursor.execute("SELECT * FROM keys WHERE key = ?", (self.key.value,))
@@ -513,24 +495,22 @@ class ExtendKeyModal(Modal, title="Extend a VIP Key"):
                 new_expiration = current_expiration + timedelta(days=extra_days)
                 cursor.execute("UPDATE keys SET expiration = ? WHERE key = ?", (new_expiration.isoformat(), self.key.value))
                 db.commit()
-                await interaction.followup.send(f"Key `{self.key.value}` extended until {new_expiration.strftime('%Y-%m-%d')}", ephemeral=True)
-                
+                await interaction.response.send_message(f"Key `{self.key.value}` extended until {new_expiration.strftime('%Y-%m-%d')}", ephemeral=True)
                 keys_channel = discord.utils.get(interaction.guild.channels, name="keys")
                 if keys_channel:
                     await keys_channel.send(f"Key `{self.key.value}` extended until {new_expiration.strftime('%Y-%m-%d')}")
             else:
-                await interaction.followup.send("Key not found.", ephemeral=True)
+                await interaction.response.send_message("Key not found.", ephemeral=True)
         except ValueError:
-            await interaction.followup.send("Duration must be an integer!", ephemeral=True)
+            await interaction.response.send_message("Duration must be an integer!", ephemeral=True)
         except Exception as e:
             print(f"Error in ExtendKeyModal: {e}")
-            await interaction.followup.send("An error occurred while extending the key.", ephemeral=True)
+            await interaction.response.send_message("An error occurred while extending the key.", ephemeral=True)
 
 class DeleteKeyModal(Modal, title="Delete a VIP Key"):
     key = TextInput(label="Key", placeholder="e.g., ABC123")
 
     async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
         try:
             cursor.execute("SELECT user_id FROM keys WHERE key = ?", (self.key.value,))
             row = cursor.fetchone()
@@ -538,13 +518,10 @@ class DeleteKeyModal(Modal, title="Delete a VIP Key"):
                 user_id = row[0]
                 cursor.execute("DELETE FROM keys WHERE key = ?", (self.key.value,))
                 db.commit()
-                await interaction.followup.send(f"Key `{self.key.value}` deleted.", ephemeral=True)
-                
+                await interaction.response.send_message(f"Key `{self.key.value}` deleted.", ephemeral=True)
                 keys_channel = discord.utils.get(interaction.guild.channels, name="keys")
                 if keys_channel:
                     await keys_channel.send(f"Key `{self.key.value}` deleted.")
-
-                # Remove VIP role from user
                 guild = interaction.guild
                 member = guild.get_member(int(user_id))
                 if member:
@@ -555,16 +532,15 @@ class DeleteKeyModal(Modal, title="Delete a VIP Key"):
                         if log_channel:
                             await log_channel.send(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] VIP role removed from user {user_id} due to key deletion")
             else:
-                await interaction.followup.send("Key not found.", ephemeral=True)
+                await interaction.response.send_message("Key not found.", ephemeral=True)
         except Exception as e:
             print(f"Error in DeleteKeyModal: {e}")
-            await interaction.followup.send("An error occurred while deleting the key.", ephemeral=True)
+            await interaction.response.send_message("An error occurred while deleting the key.", ephemeral=True)
 
 class RevokeKeyModal(Modal, title="Revoke a VIP Key"):
     key = TextInput(label="Key", placeholder="e.g., ABC123")
 
     async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
         try:
             cursor.execute("SELECT user_id FROM keys WHERE key = ?", (self.key.value,))
             row = cursor.fetchone()
@@ -572,9 +548,7 @@ class RevokeKeyModal(Modal, title="Revoke a VIP Key"):
                 user_id = row[0]
                 cursor.execute("UPDATE keys SET status = 'inactive' WHERE key = ?", (self.key.value,))
                 db.commit()
-                await interaction.followup.send(f"Key `{self.key.value}` has been revoked.", ephemeral=True)
-
-                # Remove VIP role from user
+                await interaction.response.send_message(f"Key `{self.key.value}` has been revoked.", ephemeral=True)
                 guild = interaction.guild
                 member = guild.get_member(int(user_id))
                 if member:
@@ -585,24 +559,21 @@ class RevokeKeyModal(Modal, title="Revoke a VIP Key"):
                         if log_channel:
                             await log_channel.send(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] VIP role removed from user {user_id} due to key revocation")
             else:
-                await interaction.followup.send("Key not found.", ephemeral=True)
+                await interaction.response.send_message("Key not found.", ephemeral=True)
         except Exception as e:
             print(f"Error in RevokeKeyModal: {e}")
-            await interaction.followup.send("An error occurred while revoking the key.", ephemeral=True)
+            await interaction.response.send_message("An error occurred while revoking the key.", ephemeral=True)
 
 class BanUserModal(Modal, title="Ban a User"):
     user_id = TextInput(label="User ID", placeholder="e.g., 123456789")
 
     async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
         try:
             user_id = self.user_id.value
             cursor.execute("INSERT OR IGNORE INTO banned_users (user_id) VALUES (?)", (user_id,))
             cursor.execute("DELETE FROM keys WHERE user_id = ?", (user_id,))
             db.commit()
-            await interaction.followup.send(f"User <@{user_id}> has been banned and all their keys have been deleted.", ephemeral=True)
-
-            # Remove VIP role from user
+            await interaction.response.send_message(f"User <@{user_id}> has been banned and all their keys have been deleted.", ephemeral=True)
             guild = interaction.guild
             member = guild.get_member(int(user_id))
             if member:
@@ -614,72 +585,66 @@ class BanUserModal(Modal, title="Ban a User"):
                         await log_channel.send(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] VIP role removed from user {user_id} due to ban")
         except Exception as e:
             print(f"Error in BanUserModal: {e}")
-            await interaction.followup.send("An error occurred while banning the user.", ephemeral=True)
+            await interaction.response.send_message("An error occurred while banning the user.", ephemeral=True)
 
 class MaintenanceModal(Modal, title="Manage Maintenance Mode"):
     action = TextInput(label="Action (enable/disable/add_time)", placeholder="e.g., enable")
     duration = TextInput(label="Duration (hours, if enabling/adding)", placeholder="e.g., 24", required=False)
 
     async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
         try:
             action = self.action.value.lower()
             log_channel = discord.utils.get(interaction.guild.channels, name="logs")
-
             if action not in ["enable", "disable", "add_time"]:
-                await interaction.followup.send("Invalid action! Use 'enable', 'disable', or 'add_time'.", ephemeral=True)
+                await interaction.response.send_message("Invalid action! Use 'enable', 'disable', or 'add_time'.", ephemeral=True)
                 return
-
             if action == "disable":
                 cursor.execute("UPDATE maintenance SET active = ?, end_time = ?, last_updated = ? WHERE id = ?",
                                (False, None, datetime.now().isoformat(), 1))
                 db.commit()
-                await interaction.followup.send("Maintenance mode disabled.", ephemeral=True)
+                await interaction.response.send_message("Maintenance mode disabled.", ephemeral=True)
                 if log_channel:
                     await log_channel.send(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Maintenance mode disabled by {interaction.user.mention}")
                 return
-
             if not self.duration.value:
-                await interaction.followup.send("Duration is required for enabling or adding time!", ephemeral=True)
+                await interaction.response.send_message("Duration is required for enabling or adding time!", ephemeral=True)
                 return
-
             duration_hours = int(self.duration.value)
             if duration_hours <= 0:
-                await interaction.followup.send("Duration must be a positive integer (in hours)!", ephemeral=True)
+                await interaction.response.send_message("Duration must be a positive integer (in hours)!", ephemeral=True)
                 return
-
             if action == "enable":
                 end_time = datetime.now() + timedelta(hours=duration_hours)
                 cursor.execute("UPDATE maintenance SET active = ?, end_time = ?, last_updated = ? WHERE id = ?",
                                (True, end_time.isoformat(), datetime.now().isoformat(), 1))
                 db.commit()
-                await interaction.followup.send(f"Maintenance mode enabled until {end_time.strftime('%Y-%m-%d %H:%M:%S')}.", ephemeral=True)
+                await interaction.response.send_message(f"Maintenance mode enabled until {end_time.strftime('%Y-%m-%d %H:%M:%S')}.", ephemeral=True)
                 if log_channel:
                     await log_channel.send(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Maintenance mode enabled by {interaction.user.mention} until {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
             elif action == "add_time":
                 cursor.execute("SELECT active, end_time FROM maintenance WHERE id = 1")
                 row = cursor.fetchone()
                 if not row or not row[0]:
-                    await interaction.followup.send("Maintenance mode is not active! Enable it first.", ephemeral=True)
+                    await interaction.response.send_message("Maintenance mode is not active! Enable it first.", ephemeral=True)
                     return
                 current_end_time = datetime.fromisoformat(row[1])
                 if datetime.now() > current_end_time:
-                    await interaction.followup.send("Maintenance mode has already ended! Enable it again.", ephemeral=True)
+                    await interaction.response.send_message("Maintenance mode has already ended! Enable it again.", ephemeral=True)
                     return
                 new_end_time = current_end_time + timedelta(hours=duration_hours)
                 cursor.execute("UPDATE maintenance SET end_time = ?, last_updated = ? WHERE id = ?",
                                (new_end_time.isoformat(), datetime.now().isoformat(), 1))
                 db.commit()
-                await interaction.followup.send(f"Maintenance time extended until {new_end_time.strftime('%Y-%m-%d %H:%M:%S')}.", ephemeral=True)
+                await interaction.response.send_message(f"Maintenance time extended until {new_end_time.strftime('%Y-%m-%d %H:%M:%S')}.", ephemeral=True)
                 if log_channel:
                     await log_channel.send(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Maintenance time extended by {interaction.user.mention} until {new_end_time.strftime('%Y-%m-%d %H:%M:%S')}")
         except ValueError:
-            await interaction.followup.send("Duration must be a positive integer (in hours)!", ephemeral=True)
+            await interaction.response.send_message("Duration must be a positive integer (in hours)!", ephemeral=True)
         except Exception as e:
             print(f"Error in MaintenanceModal: {e}")
-            await interaction.followup.send("An error occurred while managing maintenance mode.", ephemeral=True)
+            await interaction.response.send_message("An error occurred while managing maintenance mode.", ephemeral=True)
 
-# Task to check expired keys
+# Tasks
 @tasks.loop(minutes=60)
 async def check_expired_keys():
     try:
@@ -687,7 +652,6 @@ async def check_expired_keys():
         keys = cursor.fetchall()
         guild = bot.get_guild(int(GUILD_ID))
         log_channel = discord.utils.get(guild.channels, name="logs")
-
         for key in keys:
             key_value, user_id, expiration, status, registration_date, android_uid = key
             expiration_date = datetime.fromisoformat(expiration)
@@ -696,8 +660,6 @@ async def check_expired_keys():
                 db.commit()
                 if log_channel:
                     await log_channel.send(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Key `{key_value}` has expired for user {user_id}")
-
-                # Remove VIP role from user
                 member = guild.get_member(int(user_id))
                 if member:
                     vip_role = guild.get_role(int(VIP_ROLE_ID))
@@ -708,17 +670,14 @@ async def check_expired_keys():
     except Exception as e:
         print(f"Error in check_expired_keys: {e}")
 
-# Task to refresh messages periodically
 @tasks.loop(minutes=10)
 async def refresh_messages():
     try:
         guild = bot.get_guild(int(GUILD_ID))
         if not guild:
             return
-
         admin_channel = discord.utils.get(guild.channels, name="admin")
-        tickets_channel = discord.utils.get(guild.channels, name="ticket")
-
+        tickets_channel = discord.utils.get(guild.channels, name="buy-hack-ticket")
         if admin_channel:
             async for message in admin_channel.history(limit=10):
                 if message.author == bot.user and message.embeds and "Admin Controls" in message.embeds[0].title:
@@ -730,7 +689,6 @@ async def refresh_messages():
                     admin_embed.set_footer(text="Powered by DZZHACKS")
                     await message.edit(embed=admin_embed, view=AdminView())
                     break
-
         if tickets_channel:
             async for message in tickets_channel.history(limit=10):
                 if message.author == bot.user and message.embeds and "Support Tickets" in message.embeds[0].title:
@@ -745,13 +703,13 @@ async def refresh_messages():
     except Exception as e:
         print(f"Error in refresh_messages: {e}")
 
-# Register persistent views
+# Setup persistent views
 def setup_persistent_views():
     bot.add_view(AdminView())
     bot.add_view(TicketView())
     bot.add_view(TicketActionsView())
 
-# Startup event with channel setup
+# Bot events
 @bot.event
 async def on_ready():
     print(f"Bot logged in as {bot.user}")
@@ -759,30 +717,21 @@ async def on_ready():
     if not guild:
         print("Guild not found! Check GUILD_ID.")
         return
-
-    # Register persistent views
     setup_persistent_views()
-
-    # Start the refresh task
     if not refresh_messages.is_running():
         refresh_messages.start()
-
-    # Define permissions for private channels (logs and keys)
     private_overwrites = {
         guild.default_role: discord.PermissionOverwrite(view_channel=False),
         guild.get_role(int(ADMIN_ROLE_ID)): discord.PermissionOverwrite(view_channel=True, send_messages=True)
     }
-
     management_category = discord.utils.get(guild.categories, name="DZZHACKS PANEL")
     if not management_category:
         management_category = await guild.create_category("DZZHACKS PANEL")
         print("Category 'DZZHACKS PANEL' created.")
-
     tickets_category = discord.utils.get(guild.categories, name="Tickets")
     if not tickets_category:
         tickets_category = await guild.create_category("Tickets")
         print("Category 'Tickets' created.")
-
     admin_channel = discord.utils.get(guild.channels, name="admin")
     if not admin_channel:
         admin_channel = await guild.create_text_channel(
@@ -794,54 +743,44 @@ async def on_ready():
             }
         )
         print("Channel 'admin' created.")
-
-    # Check if an admin message already exists
     admin_message = None
     async for message in admin_channel.history(limit=10):
         if message.author == bot.user and message.embeds and "Admin Controls" in message.embeds[0].title:
             admin_message = message
             break
-
     admin_embed = discord.Embed(
         title="Admin Controls",
         description="Manage VIP keys, users, and maintenance with the buttons below.",
         color=discord.Color.red()
     )
     admin_embed.set_footer(text="Powered by DZZHACKS")
-    
     if admin_message:
         await admin_message.edit(embed=admin_embed, view=AdminView())
         print("Updated existing admin message.")
     else:
         await admin_channel.send(embed=admin_embed, view=AdminView())
         print("Sent new admin message.")
-
     tickets_channel = discord.utils.get(guild.channels, name="buy-hack-ticket")
     if not tickets_channel:
         tickets_channel = await guild.create_text_channel("buy-hack-ticket", category=tickets_category)
         print("Channel 'buy-hack-ticket' created.")
-
-    # Check if a tickets message already exists
     tickets_message = None
     async for message in tickets_channel.history(limit=10):
         if message.author == bot.user and message.embeds and "Support Tickets" in message.embeds[0].title:
             tickets_message = message
             break
-
     ticket_embed = discord.Embed(
         title="Support Tickets",
         description="Open a ticket to report a bug or request payment information.",
         color=discord.Color.red()
     )
     ticket_embed.set_footer(text="Powered by DZZHACKS")
-    
     if tickets_message:
         await tickets_message.edit(embed=ticket_embed, view=TicketView())
         print("Updated existing tickets message.")
     else:
         await tickets_channel.send(embed=ticket_embed, view=TicketView())
         print("Sent new tickets message.")
-
     logs_channel = discord.utils.get(guild.channels, name="logs")
     if not logs_channel:
         logs_channel = await guild.create_text_channel(
@@ -855,7 +794,6 @@ async def on_ready():
             break
     else:
         await logs_channel.send("Logs will appear here when the script is executed or actions are performed.")
-
     keys_channel = discord.utils.get(guild.channels, name="keys")
     if not keys_channel:
         keys_channel = await guild.create_text_channel(
@@ -864,7 +802,6 @@ async def on_ready():
             overwrites=private_overwrites
         )
         print("Channel 'keys' created.")
-    
     async for message in keys_channel.history(limit=1):
         if message.author == bot.user:
             break
@@ -876,20 +813,17 @@ async def on_ready():
             await keys_channel.send(f"**Existing Keys:**\n{keys_list}")
         else:
             await keys_channel.send("No keys registered yet.")
-
     if not check_expired_keys.is_running():
         check_expired_keys.start()
 
-# Error handler for interactions
 @bot.event
 async def on_interaction_error(interaction: discord.Interaction, error: Exception):
     print(f"Interaction error: {error}")
     try:
-        await interaction.followup.send("An error occurred while processing your request. Please try again later.", ephemeral=True)
+        await interaction.response.send_message("An error occurred while processing your request. Please try again later.", ephemeral=True)
     except:
         pass
 
-# Connection monitoring
 @bot.event
 async def on_disconnect():
     print("Bot disconnected from Discord.")
@@ -902,7 +836,7 @@ async def on_connect():
 async def on_resumed():
     print("Bot session resumed.")
 
-# Start Flask and the bot
+# Start Flask and bot
 if __name__ == "__main__":
     threading.Thread(target=lambda: app.run(host="0.0.0.0", port=5031)).start()
     load_dotenv()
