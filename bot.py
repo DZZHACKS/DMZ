@@ -57,9 +57,9 @@ if not cursor.fetchone():
     db.commit()
 
 # Admin role, Guild, and VIP role IDs
-ADMIN_ROLE_ID = "1305384766459215893"
-GUILD_ID = "1305375757681561640"
-VIP_ROLE_ID = "1352820677224431737"
+ADMIN_ROLE_ID = "1360944517972496428"
+GUILD_ID = "1360944517972496426"
+VIP_ROLE_ID = "1360944517972496427"
 
 # Flask application for API
 app = Flask(__name__)
