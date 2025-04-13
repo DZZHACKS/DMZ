@@ -1,4 +1,3 @@
-
 import discord
 from discord.ui import Button, View, Modal, TextInput
 from discord.ext import commands, tasks
@@ -9,11 +8,6 @@ import string
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import threading
-from dotenv import load_dotenv
-import os
-
-# Charger les variables d'environnement
-load_dotenv()
 
 # Initialize intents
 intents = discord.Intents.default()
@@ -628,7 +622,7 @@ async def refresh_messages():
                     description="Manage VIP keys, users, and maintenance with the buttons below.",
                     color=discord.Color.red()
                 )
-                admin_embed.set_footer(text="Powered by D-M-Z.Com")
+                admin_embed.set_footer(text="Powered by DZZHACKS")
                 await message.edit(embed=admin_embed, view=AdminView())
                 break
 
@@ -640,7 +634,7 @@ async def refresh_messages():
                     description="Open a ticket to report a bug or request payment information.",
                     color=discord.Color.red()
                 )
-                ticket_embed.set_footer(text="Powered by D-M-Z.Com")
+                ticket_embed.set_footer(text="Powered by DZZHACKS")
                 await message.edit(embed=ticket_embed, view=TicketView())
                 break
 
@@ -672,10 +666,10 @@ async def on_ready():
         guild.get_role(int(ADMIN_ROLE_ID)): discord.PermissionOverwrite(view_channel=True, send_messages=True)
     }
 
-    management_category = discord.utils.get(guild.categories, name="DZZHACKS")
+    management_category = discord.utils.get(guild.categories, name="DZZHACKS PANEL")
     if not management_category:
-        management_category = await guild.create_category("DZZHACKS")
-        print("Category 'DZZHACKS' created.")
+        management_category = await guild.create_category("DZZHACKS PANEL")
+        print("Category 'DZZHACKS PANEL' created.")
 
     tickets_category = discord.utils.get(guild.categories, name="Tickets")
     if not tickets_category:
@@ -706,7 +700,7 @@ async def on_ready():
         description="Manage VIP keys, users, and maintenance with the buttons below.",
         color=discord.Color.red()
     )
-    admin_embed.set_footer(text="Powered by D-M-Z.Com")
+    admin_embed.set_footer(text="Powered by DZZHACKS")
     
     if admin_message:
         # Update the existing message
@@ -717,10 +711,10 @@ async def on_ready():
         await admin_channel.send(embed=admin_embed, view=AdminView())
         print("Sent new admin message.")
 
-    tickets_channel = discord.utils.get(guild.channels, name="ticket")
+    tickets_channel = discord.utils.get(guild.channels, name="buy-hack-ticket")
     if not tickets_channel:
-        tickets_channel = await guild.create_text_channel("ticket", category=tickets_category)
-        print("Channel 'ticket' created.")
+        tickets_channel = await guild.create_text_channel("buy-hack-ticket", category=tickets_category)
+        print("Channel 'buy-hack-ticket' created.")
 
     # Check if a tickets message already exists
     tickets_message = None
@@ -734,7 +728,7 @@ async def on_ready():
         description="Open a ticket to report a bug or request payment information.",
         color=discord.Color.red()
     )
-    ticket_embed.set_footer(text="Powered by D-M-Z.Com")
+    ticket_embed.set_footer(text="Powered by DZZHACKS")
     
     if tickets_message:
         # Update the existing message
@@ -807,6 +801,5 @@ async def on_resumed():
 
 # Start Flask and the bot
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 5031))
-    threading.Thread(target=lambda: app.run(host="0.0.0.0", port=port)).start()
-    bot.run(os.getenv("DISCORD_TOKEN"))
+    threading.Thread(target=lambda: app.run(host="0.0.0.0", port=5031)).start()
+    bot.run("DISCORD_TOKEN")
