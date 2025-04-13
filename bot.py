@@ -672,10 +672,10 @@ async def on_ready():
         guild.get_role(int(ADMIN_ROLE_ID)): discord.PermissionOverwrite(view_channel=True, send_messages=True)
     }
 
-    management_category = discord.utils.get(guild.categories, name="ZLI Management")
+    management_category = discord.utils.get(guild.categories, name="DZZHACKS")
     if not management_category:
-        management_category = await guild.create_category("ZLI Management")
-        print("Category 'ZLI Management' created.")
+        management_category = await guild.create_category("DZZHACKS")
+        print("Category 'DZZHACKS' created.")
 
     tickets_category = discord.utils.get(guild.categories, name="Tickets")
     if not tickets_category:
