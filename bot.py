@@ -717,7 +717,7 @@ async def refresh_messages():
             return
 
         admin_channel = discord.utils.get(guild.channels, name="admin")
-        tickets_channel = discord.utils.get(guild.channels, name="buy-hack-ticket")
+        tickets_channel = discord.utils.get(guild.channels, name="ticket")
 
         if admin_channel:
             async for message in admin_channel.history(limit=10):
