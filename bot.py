@@ -650,15 +650,19 @@ def setup_persistent_views():
     bot.add_view(TicketView())
     bot.add_view(TicketActionsView())
 
+
 # Startup event with channel setup
 @bot.event
 async def on_ready():
     print(f"Bot logged in as {bot.user}")
+    
+    # Set bot status
+    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.playing, name="Verifying Keys | Modding LDOE & Grim Soul"))
+    
     guild = bot.get_guild(int(GUILD_ID))
     if not guild:
         print("Guild not found! Check GUILD_ID.")
         return
-
     # Register persistent views
     setup_persistent_views()
 
