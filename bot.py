@@ -1,4 +1,3 @@
-
 import discord
 from discord.ui import Button, View, Modal, TextInput
 from discord.ext import commands, tasks
@@ -610,6 +609,17 @@ async def check_expired_keys():
                     if log_channel:
                         await log_channel.send(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] VIP role removed from user {user_id} due to key expiration")
 
+# Task to alternate bot status
+@tasks.loop(minutes=1)
+async def change_status():
+    statuses = [
+        discord.Activity(type=discord.ActivityType.playing, name="Verifying Keys"),
+        discord.Activity(type=discord.ActivityType.playing, name="Modding LDOE & Grim Soul")
+    ]
+    current_status = getattr(change_status, "current_index", 0)
+    await bot.change_presence(activity=statuses[current_status])
+    change_status.current_index = (current_status + 1) % len(statuses)
+
 # Task to refresh messages periodically to prevent interaction expiration
 @tasks.loop(minutes=10)
 async def refresh_messages():
@@ -650,19 +660,20 @@ def setup_persistent_views():
     bot.add_view(TicketView())
     bot.add_view(TicketActionsView())
 
-
 # Startup event with channel setup
 @bot.event
 async def on_ready():
     print(f"Bot logged in as {bot.user}")
     
-    # Set bot status
-    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.playing, name="Verifying Keys | Modding LDOE & Grim Soul"))
+    # Start the status change task
+    if not change_status.is_running():
+        change_status.start()
     
     guild = bot.get_guild(int(GUILD_ID))
     if not guild:
         print("Guild not found! Check GUILD_ID.")
         return
+
     # Register persistent views
     setup_persistent_views()
 
